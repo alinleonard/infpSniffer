@@ -5,35 +5,41 @@ import time
 import datetime
 import os
 
-def main():
+def main(proxy):
 	threshold = 3 # look for magnitude higher or equal to this value
 
-	# Retry to get data from infp for 5 time , sleep 30 seconds in between
-	for x in range(0, 5):
-		try:
-			url = urllib2.urlopen('http://www.infp.ro/data/webSeismicity.json')
-			error_fetch = None
-		except urllib2.HTTPError, e:
-			if e.code:
-				print(e.code)
-				error_fetch = e.code
+	if not proxy:
+		# Retry to get data from infp for 5 time , sleep 30 seconds in between
+		for x in range(0, 5):
+			try:
+				url = urllib2.urlopen('http://www.infp.ro/data/webSeismicity.json')
+				error_fetch = None
+			except urllib2.HTTPError, e:
+				if e.code:
+					print(e.code)
+					error_fetch = e.code
+				else:
+					error_fetch = "HTTPError"
+					print error_fetch
+			except urllib2.URLError, e:
+				if e.args:
+					print(e.args)
+					error_fetch = e.code
+				else:
+					error_fetch = "URLError"
+					print error_fetch
+			if error_fetch:
+				from time import sleep
+				sleep(30)
+				if x == 5: # If this is the last pass here , and we did try 5 times exit program
+					exit()
 			else:
-				error_fetch = "HTTPError"
-				print error_fetch
-		except urllib2.URLError, e:
-			if e.args:
-				print(e.args)
-				error_fetch = e.code
-			else:
-				error_fetch = "URLError"
-				print error_fetch
-		if error_fetch:
-			from time import sleep
-			sleep(30)
-			if x == 5: # If this is the last pass here , and we did try 5 times exit program
-				exit()
-		else:
-			break
+				break
+	else:
+		url = setProxy()
+		if not url:
+			print "No Proxy To Work With"
+			exit()
 
 	j_obj = json.load(url) #Page loaded fine so we can load the json
 	
@@ -84,6 +90,34 @@ def logCutremure(m, r, d, c):
 	print "\t log saved"	
 	return
 
+#Proxies
+def setProxy():
+	import urllib
+	with open('proxy.txt','r') as proxys:
+		proxy = proxys.readlines()
+	if len(proxy) > 0:
+		for x in range(0, len(proxy)-1):
+			try:
+				s = urllib.urlopen(
+					"http://www.infp.ro/data/webSeismicity.json",
+					proxies={"http":proxy[x]}
+					)
+			except IOError:
+				saveNWProxies(proxy[x])
+				error_proxy = "connection problem"
+			else:
+				break
+	else:
+		s = None	
+
+	return s
+
+#save not working proxies
+def saveNWProxies(address):
+	with open('nwProxy.txt','a+') as myFile:
+		myFile.write(address)
+	return
+
 try:
 	print datetime.datetime.now() #  Print the time when it started running
 	
@@ -92,10 +126,10 @@ try:
 	run = raw_input("Mode: Run once or forever  ? [ 'once' , 'forever' ] \n ")
 	if run == 'forever':
 		while True:
-			main()
+			main(True)
 			time.sleep(1) #sleep for a second
 	else:
-		main()
+		main(True)
 except KeyboardInterrupt:
 	print datetime.datetime.now() # Print the time on exit
 	pass
