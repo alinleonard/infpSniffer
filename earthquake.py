@@ -6,7 +6,7 @@ import datetime
 import os
 
 def main():
-	print "INFP.ro Sniffer"
+	threshold = 3 # look for magnitude higher or equal to this value
 
 	# Retry to get data from infp for 5 time , sleep 30 seconds in between
 	for x in range(0, 5):
@@ -39,38 +39,55 @@ def main():
 		print "NO MAGNITUDE TO READ FROM"
 		exit()
 	
-	if os.path.exists('logs.json') and magnitude >= 4:
+	if os.path.exists('logs.json') and magnitude >= threshold:
 		with open('logs.json') as data_file:
 			j_obj_file = json.load(data_file)
-		if j_obj_file['local'][0]['created_at']: #if we have data to work with ( if file is not empty )
-			if j_obj_file['local'][0]['created_at']	!= created_at: # so we don't save it multiple times
+		#get the last index of the log so we can compare
+		last = 0
+		for number in j_obj_file:
+			last = last + 1
+			
+		if j_obj_file[last-1]['created_at']: #if we have data to work with ( if file is not empty )
+			if j_obj_file[last-1]['created_at']	!= created_at: # so we don't save it multiple times
 				print "CUTREMUR (new entry)"
 				logCutremure(magnitude, region, depth, created_at)
 		else: # there is no data to work with so we add now
 			print "CUTREMUR (no data , new entry)"
 			logCutremure(magnitude, region, depth, created_at)
 	else: # there is no file
-		if magnitude >= 4:
-			with open('logs.json','w+') as logFile:
-				json.dump({'magnitude':magnitude, 'region': region, 'depth':depth, 'created_at':created_at}, logFile, indent=4)
-			print "CUTREMUR (no file , new file and data)"
+		if magnitude >= threshold:
+			with open('logs.json','w') as logFile:
+				json.dump([{'magnitude':magnitude, 'region': region, 'depth':depth, 'created_at':created_at}], logFile, indent=4)
+				print "CUTREMUR (no file , new file and data)"
 
 	os.system('cls' if os.name == 'nt' else 'clear') # clear screen
 
 	print "Ultimul cutremur: \n"
-	print "%s - %s - %s km - %s \n" % (magnitude, region, depth, created_at)
+	print "Magnitudine : %s - %s - %s km - %s \n" % (magnitude, region, depth, created_at)
 
 	return
 
 def logCutremure(m, r, d, c):
-	with open('logs.json','a+') as logFile: #use of with open to open then close imediatly
-		json.dump({'magnitude':m, 'region': r, 'depth':d, 'created_at':c}, logFile, indent=4)
+	with open('logs.json', 'r') as f:
+		data = json.load(f)
+	with open('logs.json','w+') as logFile: #use of with open to open then close imediatly
+		data.append({'magnitude':m, 'region': r, 'depth':d, 'created_at':c})
+		json.dump(data, logFile, indent=4)
 	print "\t log saved"	
 	return
 
 try:
 	print datetime.datetime.now() #  Print the time when it started running
-	main()
+	
+	print "INFP.ro Sniffer \n \n"
+
+	run = raw_input("Mode: Run once or forever  ? [ 'once' , 'forever' ] \n ")
+	if run == 'forever':
+		while True:
+			main()
+			time.sleep(1) #sleep for a second
+	else:
+		main()
 except KeyboardInterrupt:
 	print datetime.datetime.now() # Print the time on exit
 	pass
