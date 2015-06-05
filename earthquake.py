@@ -14,11 +14,19 @@ def main():
 			url = urllib2.urlopen('http://www.infp.ro/data/webSeismicity.json')
 			error_fetch = None
 		except urllib2.HTTPError, e:
-			print(e.code)
-			error_fetch = e.code
+			if e.code:
+				print(e.code)
+				error_fetch = e.code
+			else:
+				error_fetch = "HTTPError"
+				print error_fetch
 		except urllib2.URLError, e:
-			print(e.args)
-			error_fetch = e.code
+			if e.args:
+				print(e.args)
+				error_fetch = e.code
+			else:
+				error_fetch = "URLError"
+				print error_fetch
 		if error_fetch:
 			from time import sleep
 			sleep(30)
