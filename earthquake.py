@@ -5,6 +5,7 @@ import time
 import datetime
 import os
 import random
+import httplib
 
 debug = True
 
@@ -66,6 +67,10 @@ def loadData(data,proxy,fdataR,fdataT,retry,timeout):
 			json_error = None
 			break #break for loop
 		
+		if json_error and x == retry:
+			print "Json could not be loaded corectly"
+			exit()
+
 		if json_error:
 			data = fetchData(proxy,fdataR,fdataT)
 
@@ -140,11 +145,13 @@ def setProxy():
 				urllib2.install_opener(opener)
 				s = urllib2.urlopen(
 					"http://www.infp.ro/data/webSeismicity.json",
-					timeout=4
+					timeout=5
 					)
-			except IOError:
+			except (IOError, httplib.HTTPException):
 				saveNWProxies(proxy[x])
 				#time.sleep(5) sleep may be needed so we don't get banned on proxis
+				s = None
+			except socket.timeout:
 				s = None
 			else:
 				break
@@ -162,6 +169,39 @@ def saveNWProxies(address):
 		myFile.write(address)
 	return
 
+def clearNWProxies():
+	with open('nwProxy.txt','r') as myFile: #read and save a list with not working proxies
+		proxyNW = myFile.readlines()
+
+	with open('proxy.txt','r') as myFile: #read and save a list with all proxies
+		proxy = myFile.readlines()
+
+	print "Total proxies before clean: " , len(proxy)
+
+	open('proxy.txt' , 'w').close()
+
+	newProxy = []
+	x = 0
+
+	proxy = list(set(proxy)) #remove duplicates
+
+	while (x <= len(proxy)-1):
+		for y in range(0, len(proxyNW)-1):
+			#print "X: %s Y: %s" % (x,y)
+			if(proxy[x] == proxyNW[y]):
+				newProxy.append(proxy[x])
+				break
+		x = x + 1
+
+	with open('proxy.txt','a+') as myFile:
+		for item in newProxy:
+			myFile.write("%s" % item)
+
+	print "Total proxies after clean: " , len(newProxy)
+
+	return
+
+
 #How to use the program
 #sudo python earthquake.py
 
@@ -172,6 +212,11 @@ try:
 	startTime = time.time() #use this time on exit
 	
 	print "INFP.ro Sniffer \n \n"
+
+	clear = raw_input("Do you want to clear the bad proxies? <yes,no> \n")
+	if clear == 'yes':
+		print "clearing..."
+		clearNWProxies()
 
 	mode = raw_input("Run once or scan forever ? <once,forever> \n ")
 	useProxy = raw_input("Do you want to use proxy? <yes,no> \n ")
