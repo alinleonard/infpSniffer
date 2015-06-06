@@ -4,45 +4,17 @@ import os.path
 import time
 import datetime
 import os
+import random
+
+debug = True
 
 def main(proxy):
 	threshold = 3 # look for magnitude higher or equal to this value
 
-	if not proxy:
-		# Retry to get data from infp for 5 time , sleep 30 seconds in between
-		for x in range(0, 5):
-			try:
-				url = urllib2.urlopen('http://www.infp.ro/data/webSeismicity.json')
-				error_fetch = None
-			except urllib2.HTTPError, e:
-				if e.code:
-					print(e.code)
-					error_fetch = e.code
-				else:
-					error_fetch = "HTTPError"
-					print error_fetch
-			except urllib2.URLError, e:
-				if e.args:
-					print(e.args)
-					error_fetch = e.code
-				else:
-					error_fetch = "URLError"
-					print error_fetch
-			if error_fetch:
-				from time import sleep
-				sleep(30)
-				if x == 5: # If this is the last pass here , and we did try 5 times exit program
-					exit()
-			else:
-				break
-	else:
-		url = setProxy()
-		if not url:
-			print "No Proxy To Work With"
-			exit()
+	data = fetchData(proxy,5,30) #Use proxy <True,False> , Retry times <int> , Timeout before another retry <int>
 
-	j_obj = json.load(url) #Page loaded fine so we can load the json
-	
+	j_obj = loadData(data,proxy,5,30,5,0) #Proxy <True,False>, Fetch data Retry times <int> , Fetch data Timeout <int> , Load data retry <int> , Load data timeout before refech and load <int> 
+
 	magnitude = j_obj['local'][0]['magnitude'] 
 	region =  j_obj['local'][0]['region']
 	depth = j_obj['local'][0]['depth']
@@ -81,55 +53,152 @@ def main(proxy):
 
 	return
 
+
+def loadData(data,proxy,fdataR,fdataT,retry,timeout):
+	for x in range(0, retry): #Sometimes the data of the json is not loaded correct , we reload the page and load again
+		try:
+			j_obj = json.load(data)
+		except ValueError, e: #invalid json
+			json_error = "error"
+			print e
+			time.sleep(timeout)
+		else: #valid json
+			json_error = None
+			break #break for loop
+		
+		if json_error:
+			data = fetchData(proxy,fdataR,fdataT)
+
+	return j_obj
+
+def fetchData(proxy,retry,timeout):
+	if debug:
+		print "I am in fetchData ! "
+
+	if not proxy:
+		for x in range(0, retry): # Retry to get data from infp for <retry> time , sleep <timeout> seconds in between
+			try:
+				data = urllib2.urlopen('http://www.infp.ro/data/webSeismicity.json')
+				error_fetch = None
+			except urllib2.HTTPError, e:
+				if e.code:
+					print(e.code)
+					error_fetch = e.code
+				else:
+					error_fetch = "HTTPError"
+					print error_fetch
+			except urllib2.URLError, e:
+				if e.args:
+					print(e.args)
+					error_fetch = e.code
+				else:
+					error_fetch = "URLError"
+					print error_fetch
+			if error_fetch:
+				time.sleep(timeout)
+				if x == retry: # If this is the last pass here , and we did try <retry> times exit the program
+					exit()
+			else:
+				break
+	else:
+		data = setProxy()
+		if not data:
+			print "no proxy to work with!"
+			exit()
+	
+	if debug:
+		print "I am about the return the data in fetchData ! "
+
+	return data
+
 def logCutremure(m, r, d, c):
-	with open('logs.json', 'r') as f:
+	with open('logs.json', 'r') as f: #read the content of the file so we can append later on
 		data = json.load(f)
-	with open('logs.json','w+') as logFile: #use of with open to open then close imediatly
+	with open('logs.json','w+') as logFile: #we use <with open> so the file will close after we use it
 		data.append({'magnitude':m, 'region': r, 'depth':d, 'created_at':c})
 		json.dump(data, logFile, indent=4)
 	print "\t log saved"	
 	return
 
-#Proxies
+#Load and connect to proxies
 def setProxy():
-	import urllib
+	if debug:
+		print "I am in set proxy ! "
+
 	with open('proxy.txt','r') as proxys:
 		proxy = proxys.readlines()
 	if len(proxy) > 0:
 		for x in range(0, len(proxy)-1):
 			try:
-				s = urllib.urlopen(
+				rnd = random.randint(0,len(proxy)-1)
+
+				if debug:
+					print "I try to open the url with proxy the : %s time , random numer: %s proxy used to load %s " % (x,rnd,proxy[rnd])
+					
+				proxyHandler = urllib2.ProxyHandler({'http': proxy[rnd]})
+				opener = urllib2.build_opener(proxyHandler)
+				urllib2.install_opener(opener)
+				s = urllib2.urlopen(
 					"http://www.infp.ro/data/webSeismicity.json",
-					proxies={"http":proxy[x]}
+					timeout=4
 					)
 			except IOError:
 				saveNWProxies(proxy[x])
-				error_proxy = "connection problem"
+				#time.sleep(5) sleep may be needed so we don't get banned on proxis
+				s = None
 			else:
 				break
 	else:
-		s = None	
+		s = None
 
 	return s
 
-#save not working proxies
+#Save in a file the proxies that don't connect
 def saveNWProxies(address):
+	if debug:
+		print "I am in save not used proxies!"
+
 	with open('nwProxy.txt','a+') as myFile:
 		myFile.write(address)
 	return
 
+#How to use the program
+#sudo python earthquake.py
+
 try:
-	print datetime.datetime.now() #  Print the time when it started running
+	complete = 0 #number of times the program has completed the program
+
+	timeRun = datetime.datetime.now() #use this time on exit
+	startTime = time.time() #use this time on exit
 	
 	print "INFP.ro Sniffer \n \n"
 
-	run = raw_input("Mode: Run once or forever  ? [ 'once' , 'forever' ] \n ")
-	if run == 'forever':
-		while True:
-			main(True)
-			time.sleep(1) #sleep for a second
+	mode = raw_input("Run once or scan forever ? <once,forever> \n ")
+	useProxy = raw_input("Do you want to use proxy? <yes,no> \n ")
+
+	#Interpret the inputs
+	if mode == 'forever':
+		if useProxy == 'yes': # use proxy
+			while True:
+				main(True)
+				time.sleep(1) #sleep for a second , we may not need it for proxy
+				if debug:
+					complete = complete + 1
+		else: # don't use proxy
+			while True:
+				main(False)
+				time.sleep(1) #sleep for a second
 	else:
-		main(True)
+		if useProxy == 'yes':
+			main(True)
+		else:
+			main(False)
+
 except KeyboardInterrupt:
-	print datetime.datetime.now() # Print the time on exit
+	if debug:
+		print "The program completed in forever mode : %s times" % (complete)
+	# Print the time on exit
+	print "\nProgram has started running at : %s " % (timeRun)
+	print "Program has stopped running at : %s " % (datetime.datetime.now()) 
+	print "---- Program runned for %s seconds ---- " % (time.time() - startTime)
 	pass
