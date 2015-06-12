@@ -6,6 +6,7 @@ import datetime
 import os
 import random
 import httplib
+import socket
 
 debug = True
 
@@ -58,10 +59,12 @@ def main(proxy):
 def loadData(data,proxy,fdataR,fdataT,retry,timeout):
 	for x in range(0, retry): #Sometimes the data of the json is not loaded correct , we reload the page and load again
 		try:
-			j_obj = json.load(data)
+			with open('cache.json','r') as data_file:
+				j_obj = json.load(data_file)		
 		except ValueError, e: #invalid json
 			json_error = "error"
-			print e
+			if debug:
+				print "\t\t---triggered expect ValueError, e in loadData---\n\t---error triggered: %s --- " % (e)
 			time.sleep(timeout)
 		else: #valid json
 			json_error = None
@@ -72,13 +75,13 @@ def loadData(data,proxy,fdataR,fdataT,retry,timeout):
 			exit()
 
 		if json_error:
+			if debug:
+				print "\t\t--- in loadData , json_error = true ---"
 			data = fetchData(proxy,fdataR,fdataT)
 
 	return j_obj
 
 def fetchData(proxy,retry,timeout):
-	if debug:
-		print "I am in fetchData ! "
 
 	if not proxy:
 		for x in range(0, retry): # Retry to get data from infp for <retry> time , sleep <timeout> seconds in between
@@ -111,8 +114,6 @@ def fetchData(proxy,retry,timeout):
 			print "no proxy to work with!"
 			exit()
 	
-	if debug:
-		print "I am about the return the data in fetchData ! "
 
 	return data
 
@@ -127,8 +128,6 @@ def logCutremure(m, r, d, c):
 
 #Load and connect to proxies
 def setProxy():
-	if debug:
-		print "I am in set proxy ! "
 
 	with open('proxy.txt','r') as proxys:
 		proxy = proxys.readlines()
@@ -138,7 +137,7 @@ def setProxy():
 				rnd = random.randint(0,len(proxy)-1)
 
 				if debug:
-					print "I try to open the url with proxy the : %s time , random numer: %s proxy used to load %s " % (x,rnd,proxy[rnd])
+					print "try Proxy : %s time , random numer: %s proxy used to load %s " % (x,rnd,proxy[rnd])
 					
 				proxyHandler = urllib2.ProxyHandler({'http': proxy[rnd]})
 				opener = urllib2.build_opener(proxyHandler)
@@ -147,6 +146,11 @@ def setProxy():
 					"http://www.infp.ro/data/webSeismicity.json",
 					timeout=5
 					)
+
+				with open('cache.json', 'w+') as data_file:
+					data_file.write(s.read())
+				
+				s.close()
 			except (IOError, httplib.HTTPException):
 				saveNWProxies(proxy[x])
 				#time.sleep(5) sleep may be needed so we don't get banned on proxis
@@ -162,9 +166,6 @@ def setProxy():
 
 #Save in a file the proxies that don't connect
 def saveNWProxies(address):
-	if debug:
-		print "I am in save not used proxies!"
-
 	with open('nwProxy.txt','a+') as myFile:
 		myFile.write(address)
 	return
