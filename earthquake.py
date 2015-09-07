@@ -15,9 +15,15 @@ def main(proxy):
 
 	data = fetchData(proxy,5,30) #Use proxy <True,False> , Retry times <int> , Timeout before another retry <int>
 
-	j_obj = loadData(data,proxy,5,30,5,0) #Proxy <True,False>, Fetch data Retry times <int> , Fetch data Timeout <int> , Load data retry <int> , Load data timeout before refech and load <int> 
+	j_obj = loadData(proxy,5,30,5,0) #Proxy <True,False>, Fetch data Retry times <int> , Fetch data Timeout <int> , Load data retry <int> , Load data timeout before refech and load <int> 
 
-	magnitude = j_obj['local'][0]['magnitude'] 
+	print j_obj
+	
+	if 'local' in j_obj:
+		magnitude = j_obj['local'][0]['magnitude']
+	else:
+		magnitude = 0
+
 	region =  j_obj['local'][0]['region']
 	depth = j_obj['local'][0]['depth']
 	created_at = j_obj['local'][0]['dt_rom']
@@ -56,7 +62,7 @@ def main(proxy):
 	return
 
 
-def loadData(data,proxy,fdataR,fdataT,retry,timeout):
+def loadData(proxy,fdataR,fdataT,retry,timeout):
 	for x in range(0, retry): #Sometimes the data of the json is not loaded correct , we reload the page and load again
 		try:
 			with open('cache.json','r') as data_file:
@@ -77,7 +83,7 @@ def loadData(data,proxy,fdataR,fdataT,retry,timeout):
 		if json_error:
 			if debug:
 				print "\t\t--- in loadData , json_error = true ---"
-			data = fetchData(proxy,fdataR,fdataT)
+			fetchData(proxy,fdataR,fdataT)
 
 	return j_obj
 
@@ -87,6 +93,8 @@ def fetchData(proxy,retry,timeout):
 		for x in range(0, retry): # Retry to get data from infp for <retry> time , sleep <timeout> seconds in between
 			try:
 				data = urllib2.urlopen('http://www.infp.ro/data/webSeismicity.json')
+				with open('cache.json', 'w+') as data_file:
+					data_file.write(data.read())
 				error_fetch = None
 			except urllib2.HTTPError, e:
 				if e.code:
@@ -181,9 +189,11 @@ def clearNWProxies():
 
 	open('proxy.txt' , 'w').close()
 
+	'''
 	newProxy = []
 	x = 0
-
+	
+	proxyNW = list(set(proxyNW)) #remove duplicates
 	proxy = list(set(proxy)) #remove duplicates
 
 	while (x <= len(proxy)-1):
@@ -193,6 +203,8 @@ def clearNWProxies():
 				newProxy.append(proxy[x])
 				break
 		x = x + 1
+	'''
+	newProxy = set(proxy) - set(proxyNW)	
 
 	with open('proxy.txt','a+') as myFile:
 		for item in newProxy:
